@@ -20,7 +20,7 @@ SIGNATURE = os.getenv("SIGNATURE")
 ORG_NAME = os.getenv("ORG_NAME")
 N = int(os.getenv("N"))
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-ALLOWED_CHAT_ID = 123456789
+ALLOWED_CHAT_ID = -1002321217341
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
@@ -116,6 +116,8 @@ def get_audit_logs(token, user_login, count, start_date="", stop_date=""):
     return []
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.id != ALLOWED_CHAT_ID:
+        return
     message = (
         "*Добро пожаловать!*\n\n"
         "Я бот для получения информации о токенах, аудите и получения ID чата.\n\n"
@@ -132,6 +134,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN)
 
 async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.id != ALLOWED_CHAT_ID:
+        return
     help_message = (
         "*Справка по командам:*\n\n"
         "• `/start` — Приветственное сообщение с перечнем команд.\n"
@@ -145,6 +149,8 @@ async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(help_message, parse_mode=ParseMode.MARKDOWN)
 
 async def tokens_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.id != ALLOWED_CHAT_ID:
+        return
     if not context.args:
         await update.message.reply_text("Пожалуйста, укажите логин. Пример: `/tokens ivanova`", parse_mode=ParseMode.MARKDOWN)
         return
@@ -177,6 +183,8 @@ async def tokens_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Токены не найдены или произошла ошибка.")
 
 async def audit_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.id != ALLOWED_CHAT_ID:
+        return
     if not context.args:
         await update.message.reply_text("Пожалуйста, укажите логин. Пример: `/audit ivanova`", parse_mode=ParseMode.MARKDOWN)
         return
@@ -240,7 +248,8 @@ async def audit_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Записи аудита не найдены или произошла ошибка.")
 
 async def get_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Получаем идентификатор чата
+    if update.effective_chat.id != ALLOWED_CHAT_ID:
+        return
     chat_id = update.effective_chat.id
     await update.message.reply_text(f"Chat ID: {chat_id}")
 

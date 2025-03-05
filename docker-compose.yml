@@ -1,0 +1,13 @@
+version: '3'
+services:
+  bot:
+    build: .
+    container_name: telegram_bot
+    restart: always
+    environment:
+      BASE_URL: ${BASE_URL}
+      GUID: ${GUID}
+      SIGNATURE: ${SIGNATURE}
+      ORG_NAME: ${ORG_NAME}
+      N: ${N}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
