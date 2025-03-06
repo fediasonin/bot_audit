@@ -32,7 +32,7 @@ def get_jwt_token():
     headers = {"Content-Type": "application/json"}
     data = {"guid": GUID, "signature": SIGNATURE}
     try:
-        response = requests.get(url, headers=headers, data=json.dumps(data), timeout=10, verify=True)
+        response = requests.get(url, headers=headers, data=json.dumps(data), timeout=10, verify=False)
         if response.status_code == 200:
             body = response.json()
             if body.get("Result") == 0:
@@ -56,7 +56,7 @@ def get_tokens_for_user(token, user_login, count):
         headers = {"Authorization": token, "Content-Type": "application/json"}
         data = {"org_name": ORG_NAME, "page_number": page, "page_size": page_size}
         try:
-            resp = requests.get(url, headers=headers, data=json.dumps(data), timeout=10, verify=True)
+            resp = requests.get(url, headers=headers, data=json.dumps(data), timeout=10, verify=False)
             if resp.status_code == 200:
                 body = resp.json()
                 if body.get("Result") == 0:
@@ -97,7 +97,7 @@ def get_audit_logs(token, user_login, count, start_date="", stop_date=""):
     if stop_date:
         data["stop_date"] = stop_date
     try:
-        resp = requests.get(url, headers=headers, data=json.dumps(data), timeout=10, verify=True)
+        resp = requests.get(url, headers=headers, data=json.dumps(data), timeout=10, verify=False)
         if resp.status_code == 200:
             body = resp.json()
             if body.get("Result") == 0:
