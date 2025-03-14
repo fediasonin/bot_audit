@@ -20,7 +20,7 @@ SIGNATURE = os.getenv("SIGNATURE")
 ORG_NAME = os.getenv("ORG_NAME")
 N = int(os.getenv("N"))
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-ALLOWED_CHAT_ID = 224015374
+ALLOWED_CHAT_ID = -1002321217341
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
