@@ -266,10 +266,10 @@ def get_enrollment_tasks_universal(token, user_login):
     variants = generate_login_variants(user_login)
     logger.info("Генерируем варианты логина для '%s': %s", user_login, variants)
     all_tasks = []
+    errors = []
     for variant in variants:
         url = f"{BASE_URL}/sdk/users/enrollments"
         headers = {"Authorization": token, "Content-Type": "application/json"}
-        # Согласно документации: параметры запроса – org_name и user_login
         data = {"org_name": ORG_NAME, "user_login": variant}
         try:
             resp = requests.get(url, headers=headers, data=json.dumps(data), timeout=10, verify=False)
@@ -279,15 +279,14 @@ def get_enrollment_tasks_universal(token, user_login):
                 if body.get("Result") == 0:
                     all_tasks.extend(body.get("Data", []))
                 else:
-                    logger.error("Ошибка запроса /sdk/users/enrollments для логина '%s': %s", variant, body.get("Details", "(нет описания)"))
+                    errors.append(f"Логин '{variant}': {body.get('Details', 'Нет описания')}")
             else:
-                logger.error("HTTP ошибка /sdk/users/enrollments для логина '%s': %s", variant, resp.text)
+                errors.append(f"Логин '{variant}': HTTP {resp.status_code}: {resp.text}")
         except requests.exceptions.RequestException as e:
-            logger.error("Сетевая ошибка для логина '%s': %s", variant, str(e))
-    # Убираем дублирование по enrollment_id
+            errors.append(f"Логин '{variant}': Сетевая ошибка: {str(e)}")
+    # Убираем дубли по enrollment_id
     unique_tasks = {task.get("enrollment_id"): task for task in all_tasks}.values()
-    return list(unique_tasks)
-
+    return list(unique_tasks), errors
 
 async def enrollments_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != ALLOWED_CHAT_ID:
@@ -300,25 +299,29 @@ async def enrollments_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     if not jwt_token:
         await update.message.reply_text("Ошибка авторизации. Попробуйте позже.")
         return
-    enrollment_tasks = get_enrollment_tasks_universal(jwt_token, user_login)
-    if enrollment_tasks:
-        response_lines = ["*Список задач активации:*"]
-        for task in enrollment_tasks:
-            enrollment_id = task.get("enrollment_id")
-            enrollment_stop_date = task.get("enrollment_stop_date", "")
-            enrollment_url = task.get("enrollment_url", "")
-            task_message = (
-                "```\n"
-                f"ID: {enrollment_id}\n"
-                f"Дата окончания: {enrollment_stop_date}\n"
-                f"URL: {enrollment_url}\n"
-                "```"
-            )
-            response_lines.append(task_message)
-        response = "\n".join(response_lines)
-        await update.message.reply_text(response, parse_mode=ParseMode.MARKDOWN)
+    enrollment_tasks, errors = get_enrollment_tasks_universal(jwt_token, user_login)
+    if errors:
+        error_text = "\n".join(errors)
+        await update.message.reply_text(f"Ошибка при получении задач активации:\n{error_text}", parse_mode=ParseMode.MARKDOWN)
     else:
-        await update.message.reply_text("Задачи активации не найдены или произошла ошибка.")
+        if enrollment_tasks:
+            response_lines = ["*Список задач активации:*"]
+            for task in enrollment_tasks:
+                enrollment_id = task.get("enrollment_id")
+                enrollment_stop_date = task.get("enrollment_stop_date", "")
+                enrollment_url = task.get("enrollment_url", "")
+                task_message = (
+                    "```\n"
+                    f"ID: {enrollment_id}\n"
+                    f"Дата окончания: {enrollment_stop_date}\n"
+                    f"URL: {enrollment_url}\n"
+                    "```"
+                )
+                response_lines.append(task_message)
+            response = "\n".join(response_lines)
+            await update.message.reply_text(response, parse_mode=ParseMode.MARKDOWN)
+        else:
+            await update.message.reply_text("У пользователя отсутствуют задачи активации.", parse_mode=ParseMode.MARKDOWN)
 
 
 async def get_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -326,6 +329,7 @@ async def get_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     #    return
     chat_id = update.effective_chat.id
     await update.message.reply_text(f"Chat ID: {chat_id}")
+
 
 async def main():
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
