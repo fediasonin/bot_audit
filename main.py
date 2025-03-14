@@ -247,9 +247,81 @@ async def audit_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("Записи аудита не найдены или произошла ошибка.")
 
-async def get_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+def generate_login_variants(login: str) -> list:
+    login = login.strip()
+    if not login:
+        return []
+    # Вариант 1 – весь логин в нижнем регистре
+    variant1 = login.lower()
+    # Вариант 2 – первая буква и две последние буквы в верхнем регистре (если длина логина позволяет)
+    if len(login) >= 3:
+        variant2 = login[0].upper() + login[1:-2].lower() + login[-2:].upper()
+    else:
+        variant2 = login.upper()
+    # Возвращаем уникальные варианты
+    return list({variant1, variant2})
+
+
+def get_enrollment_tasks_universal(token, user_login):
+    variants = generate_login_variants(user_login)
+    all_tasks = []
+    for variant in variants:
+        url = f"{BASE_URL}/sdk/users/enrollments"
+        headers = {"Authorization": token, "Content-Type": "application/json"}
+        data = {"org_name": ORG_NAME, "user_login": variant}
+        try:
+            resp = requests.get(url, headers=headers, data=json.dumps(data), timeout=10, verify=False)
+            if resp.status_code == 200:
+                body = resp.json()
+                if body.get("Result") == 0:
+                    all_tasks.extend(body.get("Data", []))
+                else:
+                    logger.error("Ошибка запроса /sdk/users/enrollments для логина '%s': %s", variant, body.get("Details", "(нет описания)"))
+            else:
+                logger.error("HTTP ошибка /sdk/users/enrollments для логина '%s': %s %s", variant, resp.status_code, resp.text)
+        except requests.exceptions.RequestException as e:
+            logger.error("Сетевая ошибка при получении задач активации для логина '%s': %s", variant, str(e))
+    # Убираем возможные дубли по идентификатору задачи (enrollment_id)
+    unique_tasks = {task.get("enrollment_id"): task for task in all_tasks}.values()
+    return list(unique_tasks)
+
+
+async def enrollments_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != ALLOWED_CHAT_ID:
         return
+    if not context.args:
+        await update.message.reply_text("Пожалуйста, укажите логин. Пример: `/enrollments ivanova`", parse_mode=ParseMode.MARKDOWN)
+        return
+    user_login = context.args[0]
+    jwt_token = get_jwt_token()
+    if not jwt_token:
+        await update.message.reply_text("Ошибка авторизации. Попробуйте позже.")
+        return
+    enrollment_tasks = get_enrollment_tasks_universal(jwt_token, user_login)
+    if enrollment_tasks:
+        response_lines = ["*Список задач активации:*"]
+        for task in enrollment_tasks:
+            enrollment_id = task.get("enrollment_id")
+            enrollment_stop_date = task.get("enrollment_stop_date", "")
+            enrollment_url = task.get("enrollment_url", "")
+            task_message = (
+                "```\n"
+                f"ID: {enrollment_id}\n"
+                f"Дата окончания: {enrollment_stop_date}\n"
+                f"URL: {enrollment_url}\n"
+                "```"
+            )
+            response_lines.append(task_message)
+        response = "\n".join(response_lines)
+        await update.message.reply_text(response, parse_mode=ParseMode.MARKDOWN)
+    else:
+        await update.message.reply_text("Задачи активации не найдены или произошла ошибка.")
+
+
+async def get_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    #if update.effective_chat.id != ALLOWED_CHAT_ID:
+    #    return
     chat_id = update.effective_chat.id
     await update.message.reply_text(f"Chat ID: {chat_id}")
 
@@ -260,6 +332,7 @@ async def main():
     app.add_handler(CommandHandler("tokens", tokens_handler))
     app.add_handler(CommandHandler("audit", audit_handler))
     app.add_handler(CommandHandler("getchatid", get_chat_id))
+    app.add_handler(CommandHandler("enrollments", enrollments_handler))
     logger.info("Бот запущен.")
     await app.run_polling()
 
