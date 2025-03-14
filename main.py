@@ -20,7 +20,7 @@ SIGNATURE = os.getenv("SIGNATURE")
 ORG_NAME = os.getenv("ORG_NAME")
 N = int(os.getenv("N"))
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-ALLOWED_CHAT_ID = -1002321217341
+ALLOWED_CHAT_ID = 224015374
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
@@ -254,24 +254,26 @@ def generate_login_variants(login: str) -> list:
         return []
     # Вариант 1 – весь логин в нижнем регистре
     variant1 = login.lower()
-    # Вариант 2 – первая буква и две последние буквы в верхнем регистре (если длина логина позволяет)
+    # Вариант 2 – первая буква и две последние буквы в верхнем регистре (если длина позволяет)
     if len(login) >= 3:
         variant2 = login[0].upper() + login[1:-2].lower() + login[-2:].upper()
     else:
         variant2 = login.upper()
-    # Возвращаем уникальные варианты
     return list({variant1, variant2})
 
 
 def get_enrollment_tasks_universal(token, user_login):
     variants = generate_login_variants(user_login)
+    logger.info("Генерируем варианты логина для '%s': %s", user_login, variants)
     all_tasks = []
     for variant in variants:
         url = f"{BASE_URL}/sdk/users/enrollments"
         headers = {"Authorization": token, "Content-Type": "application/json"}
+        # Согласно документации: параметры запроса – org_name и user_login
         data = {"org_name": ORG_NAME, "user_login": variant}
         try:
             resp = requests.get(url, headers=headers, data=json.dumps(data), timeout=10, verify=False)
+            logger.info("Запрос для логина '%s': HTTP %s, ответ: %s", variant, resp.status_code, resp.text)
             if resp.status_code == 200:
                 body = resp.json()
                 if body.get("Result") == 0:
@@ -279,10 +281,10 @@ def get_enrollment_tasks_universal(token, user_login):
                 else:
                     logger.error("Ошибка запроса /sdk/users/enrollments для логина '%s': %s", variant, body.get("Details", "(нет описания)"))
             else:
-                logger.error("HTTP ошибка /sdk/users/enrollments для логина '%s': %s %s", variant, resp.status_code, resp.text)
+                logger.error("HTTP ошибка /sdk/users/enrollments для логина '%s': %s", variant, resp.text)
         except requests.exceptions.RequestException as e:
-            logger.error("Сетевая ошибка при получении задач активации для логина '%s': %s", variant, str(e))
-    # Убираем возможные дубли по идентификатору задачи (enrollment_id)
+            logger.error("Сетевая ошибка для логина '%s': %s", variant, str(e))
+    # Убираем дублирование по enrollment_id
     unique_tasks = {task.get("enrollment_id"): task for task in all_tasks}.values()
     return list(unique_tasks)
 
