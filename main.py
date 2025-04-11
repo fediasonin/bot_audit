@@ -124,6 +124,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "*Доступные команды:*\n"
         "• `/tokens <логин>` — получить список токенов для пользователя.\n"
         "• `/audit <логин> [количество]` — получить записи аудита для пользователя. Если указано количество, результаты будут отправлены файлом.\n"
+        "• `/enrollments <логин>` — получить список задач активации для пользователя.\n"
         "• `/getchatid` — получить идентификатор чата.\n"
         "• `/help` — справка по командам.\n\n"
         "Например:\n"
@@ -314,7 +315,6 @@ async def enrollments_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
                     "```\n"
                     f"ID: {enrollment_id}\n"
                     f"Дата окончания: {enrollment_stop_date}\n"
-                    f"URL: {enrollment_url}\n"
                     "```"
                 )
                 response_lines.append(task_message)
