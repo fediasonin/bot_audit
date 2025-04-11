@@ -128,6 +128,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• `/getchatid` — получить идентификатор чата.\n"
         "• `/help` — справка по командам.\n\n"
         "Например:\n"
+        "• `/enrollments ivanova`\n"
         "• `/tokens ivanova`\n"
         "• `/audit ivanova 5`\n"
         "• `/getchatid`"
@@ -333,6 +334,21 @@ async def get_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def main():
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+
+    # Список команд с описаниями для подсказок
+    commands = [
+        ("start", "Начальное сообщение"),
+        ("help", "Показать справку"),
+        ("tokens", "Получить токены пользователя"),
+        ("audit", "Получить записи аудита"),
+        ("enrollments", "Задачи активации"),
+        ("getchatid", "Узнать ID чата")
+    ]
+
+    # Устанавливаем команды для отображения в подсказках
+    await app.bot.set_my_commands(commands)
+
+    # Регистрируем обработчики
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_handler))
     app.add_handler(CommandHandler("tokens", tokens_handler))
