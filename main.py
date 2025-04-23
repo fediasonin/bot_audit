@@ -316,6 +316,7 @@ async def enrollments_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
                     "```\n"
                     f"ID: {enrollment_id}\n"
                     f"Дата окончания: {enrollment_stop_date}\n"
+                    f"Ссылка: {enrollment_url}\n"
                     "```"
                 )
                 response_lines.append(task_message)
