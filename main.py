@@ -119,11 +119,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• `/enrollments <логин>` — получить список задач активации для пользователя.\n"
         "• `/getchatid` — получить идентификатор чата.\n"
         "• `/help` — справка по командам.\n\n"
+        "• `/activelink` — cсылки на задачи активации.\n\n"
         "Например:\n"
         "• `/enrollments ivanova`\n"
         "• `/tokens ivanova`\n"
         "• `/audit ivanova 5`\n"
-        "• `/getchatid`"
+        "• `/getchatid`\n"
+        "• `/activelink ivanova`"
     )
     await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN)
 
@@ -308,7 +310,6 @@ async def enrollments_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
                     "```\n"
                     f"ID: {enrollment_id}\n"
                     f"Дата окончания: {enrollment_stop_date}\n"
-                    f"Ссылка: {enrollment_url}\n"
                     "```"
                 )
                 response_lines.append(task_message)
@@ -316,6 +317,31 @@ async def enrollments_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             await update.message.reply_text(response, parse_mode=ParseMode.MARKDOWN)
         else:
             await update.message.reply_text("У пользователя отсутствуют задачи активации.", parse_mode=ParseMode.MARKDOWN)
+
+
+async def active_link_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.id != ALLOWED_CHAT_ID:
+        return
+    if not context.args:
+        await update.message.reply_text("Пожалуйста, укажите логин. Пример: `/activelink ivanova`", parse_mode=ParseMode.MARKDOWN)
+        return
+    user_login = context.args[0]
+    jwt_token = get_jwt_token()
+    if not jwt_token:
+        await update.message.reply_text("Ошибка авторизации. Попробуйте позже.")
+        return
+    enrollment_tasks, errors = get_enrollment_tasks_universal(jwt_token, user_login)
+    if errors:
+        error_text = "\n".join(errors)
+        await update.message.reply_text(f"Ошибка при получении задач:\n{error_text}", parse_mode=ParseMode.MARKDOWN)
+    else:
+        links = [t.get("enrollment_url") for t in enrollment_tasks if t.get("enrollment_url")]
+        if links:
+            link_text = "*Ссылки на задачи активации:*\n\n"
+            link_text += "\n".join([f"{i+1}. {link}" for i, link in enumerate(links)])
+            await update.message.reply_text(link_text, parse_mode=ParseMode.MARKDOWN)
+        else:
+            await update.message.reply_text("Активных ссылок на задачи не найдено.", parse_mode=ParseMode.MARKDOWN)
 
 
 async def get_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -335,7 +361,8 @@ async def main():
         ("tokens", "Получить токены пользователя"),
         ("audit", "Получить записи аудита"),
         ("enrollments", "Задачи активации"),
-        ("getchatid", "Узнать ID чата")
+        ("getchatid", "Узнать ID чата"),
+        ("activelink", "Ссылки на активации")
     ]
 
     # Устанавливаем команды для отображения в подсказках
@@ -348,6 +375,7 @@ async def main():
     app.add_handler(CommandHandler("audit", audit_handler))
     app.add_handler(CommandHandler("getchatid", get_chat_id))
     app.add_handler(CommandHandler("enrollments", enrollments_handler))
+    app.add_handler(CommandHandler("activelink", active_link_handler))
     logger.info("Бот запущен.")
     await app.run_polling()
 
