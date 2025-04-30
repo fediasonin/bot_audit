@@ -47,38 +47,30 @@ def get_jwt_token():
     return None
 
 def get_tokens_for_user(token, user_login, count):
-    tokens = []
-    page = 1
-    page_size = 200
-    user_login_norm = user_login.strip().lower()
-    while True:
-        url = f"{BASE_URL}/sdk/tokens/all-tokens"
-        headers = {"Authorization": token, "Content-Type": "application/json"}
-        data = {"org_name": ORG_NAME, "page_number": page, "page_size": page_size}
-        try:
-            resp = requests.get(url, headers=headers, data=json.dumps(data), timeout=10, verify=False)
-            if resp.status_code == 200:
-                body = resp.json()
-                if body.get("Result") == 0:
-                    page_tokens = body.get("Data", [])
-                    filtered = [
-                        t for t in page_tokens
-                        if (t.get("token_owner") or "").strip().lower() == user_login_norm
-                    ]
-                    tokens.extend(filtered)
-                    if len(page_tokens) < page_size or len(tokens) >= count:
-                        break
-                    page += 1
-                else:
-                    logger.error("Ошибка запроса /sdk/tokens/all-tokens: %s", body.get("Details", "(нет описания)"))
-                    break
+    url = f"{BASE_URL}/sdk/users/user-tokens"
+    headers = {
+        "Authorization": token,
+        "Content-Type": "application/json"
+    }
+    data = {
+        "org_name": ORG_NAME,
+        "user_login": user_login
+    }
+    try:
+        resp = requests.get(url, headers=headers, data=json.dumps(data), timeout=10, verify=False)
+        if resp.status_code == 200:
+            body = resp.json()
+            if body.get("Result") == 0:
+                tokens = body.get("Data", [])
+                return tokens[:count]
             else:
-                logger.error("HTTP ошибка /sdk/tokens/all-tokens: %s %s", resp.status_code, resp.text)
-                break
-        except requests.exceptions.RequestException as e:
-            logger.error("Сетевая ошибка при получении токенов: %s", str(e))
-            break
-    return tokens[:count]
+                logger.error("Ошибка запроса /sdk/users/user-tokens: %s", body.get("Details", "(нет описания)"))
+        else:
+            logger.error("HTTP ошибка /sdk/users/user-tokens: %s %s", resp.status_code, resp.text)
+    except requests.exceptions.RequestException as e:
+        logger.error("Сетевая ошибка при получении токенов: %s", str(e))
+    return []
+
 
 def parse_datetime(dt_str):
     try:
