@@ -120,6 +120,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• `/getchatid` — получить идентификатор чата.\n"
         "• `/help` — справка по командам.\n\n"
         "• `/activelink` — cсылки на задачи активации.\n\n"
+        "• `/sshlogs 'логин'` — получить логи через SSH (как на скриншоте).\n\n"
         "Например:\n"
         "• `/enrollments ivanova`\n"
         "• `/tokens ivanova`\n"
@@ -140,6 +141,8 @@ async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• `/audit <логин> [количество]` — Получить записи аудита для указанного пользователя.\n"
         "   _Пример:_ `/audit ivanova 5`\n"
         "   Если количество указано, бот отправит текстовый файл с результатами.\n\n"
+        "• `/sshlogs 'логин'` — Получить логи через SSH в формате как на скриншоте.\n"
+        "   _Пример:_ `/sshlogs 'ivanova'`\n\n"
         "• `/getchatid` — Получить идентификатор чата, из которого отправлено сообщение."
     )
     await update.message.reply_text(help_message, parse_mode=ParseMode.MARKDOWN)
@@ -242,6 +245,48 @@ async def audit_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(response, parse_mode=ParseMode.MARKDOWN)
     else:
         await update.message.reply_text("Записи аудита не найдены или произошла ошибка.")
+
+
+async def ssh_logs_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.id != ALLOWED_CHAT_ID:
+        return
+    if not context.args:
+        await update.message.reply_text("Пожалуйста, укажите логин в формате: `/sshlogs 'логин'`",
+                                        parse_mode=ParseMode.MARKDOWN)
+        return
+
+    user_login = context.args[0].strip("'\"")  # Удаляем кавычки, если они есть
+    ssh_command = f"ssh tgbot@10.4.96.65 '{user_login}'"
+
+    try:
+        # Выполняем SSH-команду
+        process = await asyncio.create_subprocess_shell(
+            ssh_command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+
+        # Ждем завершения процесса и получаем вывод
+        stdout, stderr = await process.communicate()
+
+        if process.returncode == 0:
+            logs = stdout.decode().strip()
+            if logs:
+                # Отправляем логи как текстовый файл
+                file_obj = io.BytesIO(logs.encode('utf-8'))
+                file_obj.name = f"logs_{user_login}.txt"
+                await update.message.reply_document(
+                    document=InputFile(file_obj),
+                    caption=f"Логи для пользователя: {user_login}"
+                )
+            else:
+                await update.message.reply_text(f"Логи для пользователя {user_login} не найдены.")
+        else:
+            error_msg = stderr.decode().strip()
+            await update.message.reply_text(f"Ошибка при выполнении SSH-запроса:\n{error_msg}")
+
+    except Exception as e:
+        await update.message.reply_text(f"Произошла ошибка: {str(e)}")
 
 
 def generate_login_variants(login: str) -> list:
@@ -362,7 +407,8 @@ async def main():
         ("audit", "Получить записи аудита"),
         ("enrollments", "Задачи активации"),
         ("getchatid", "Узнать ID чата"),
-        ("activelink", "Ссылки на активации")
+        ("activelink", "Ссылки на активации"),
+        ("sshlogs", "Получить логи через SSH")
     ]
 
     # Устанавливаем команды для отображения в подсказках
@@ -376,6 +422,7 @@ async def main():
     app.add_handler(CommandHandler("getchatid", get_chat_id))
     app.add_handler(CommandHandler("enrollments", enrollments_handler))
     app.add_handler(CommandHandler("activelink", active_link_handler))
+    app.add_handler(CommandHandler("sshlogs", ssh_logs_handler))
     logger.info("Бот запущен.")
     await app.run_polling()
 
