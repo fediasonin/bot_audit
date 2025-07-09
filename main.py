@@ -249,44 +249,93 @@ async def audit_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def ssh_logs_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.id != ALLOWED_CHAT_ID:
+        logger.warning(f"Доступ запрещен для chat_id: {update.effective_chat.id}")
         return
+
     if not context.args:
-        await update.message.reply_text("Пожалуйста, укажите логин в формате: `/sshlogs 'логин'`",
+        logger.warning("Не указан логин пользователя")
+        await update.message.reply_text("Пожалуйста, укажите логин: `/sshlogs 'логин'`",
                                         parse_mode=ParseMode.MARKDOWN)
         return
 
-    user_login = context.args[0].strip("'\"")  # Удаляем кавычки, если они есть
-    ssh_command = f"ssh tgbot@10.4.96.65 '{user_login}'"
+    user_login = context.args[0].strip("'\"")
+    logger.info(f"Запрошены логи для пользователя: {user_login}")
+
+    ssh_key_path = "/home/appuser/.ssh/id_ed25519"
+    ssh_host = "10.4.96.65"
+    ssh_user = "tgbot"
+
+    # Проверка существования SSH-ключа
+    if not os.path.exists(ssh_key_path):
+        error_msg = f"SSH ключ не найден по пути: {ssh_key_path}"
+        logger.error(error_msg)
+        await update.message.reply_text(f"Ошибка конфигурации: {error_msg}")
+        return
 
     try:
-        # Выполняем SSH-команду
-        process = await asyncio.create_subprocess_shell(
-            ssh_command,
+        ssh_command = [
+            "ssh",
+            "-i", ssh_key_path,
+            "-o", "StrictHostKeyChecking=yes",
+            "-o", "UserKnownHostsFile=/home/appuser/.ssh/known_hosts",
+            "-o", "LogLevel=ERROR",  # Уменьшаем verbosity SSH
+            "-v",  # Включаем verbose для логов
+            f"{ssh_user}@{ssh_host}",
+            f"'{user_login}'"
+        ]
+
+        logger.debug(f"Формируемая SSH команда: {' '.join(ssh_command)}")
+
+        process = await asyncio.create_subprocess_exec(
+            *ssh_command,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
 
-        # Ждем завершения процесса и получаем вывод
-        stdout, stderr = await process.communicate()
+        logger.info(f"Запущен SSH процесс (PID: {process.pid}) для пользователя: {user_login}")
 
-        if process.returncode == 0:
+        # Таймаут 30 секунд на выполнение
+        try:
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30.0)
+        except asyncio.TimeoutError:
+            logger.error(f"Таймаут SSH соединения для {user_login}")
+            await update.message.reply_text("Превышено время ожидания ответа от сервера")
+            return
+
+        exit_code = process.returncode
+        logger.debug(f"SSH процесс завершен с кодом: {exit_code}")
+
+        if exit_code == 0:
             logs = stdout.decode().strip()
             if logs:
-                # Отправляем логи как текстовый файл
+                logger.info(f"Успешно получены логи для {user_login} (длина: {len(logs)} символов)")
                 file_obj = io.BytesIO(logs.encode('utf-8'))
                 file_obj.name = f"logs_{user_login}.txt"
                 await update.message.reply_document(
                     document=InputFile(file_obj),
-                    caption=f"Логи для пользователя: {user_login}"
+                    caption=f"Логи для {user_login}"
                 )
             else:
-                await update.message.reply_text(f"Логи для пользователя {user_login} не найдены.")
+                logger.warning(f"Пустой ответ от сервера для {user_login}")
+                await update.message.reply_text("Сервер вернул пустой ответ")
         else:
             error_msg = stderr.decode().strip()
-            await update.message.reply_text(f"Ошибка при выполнении SSH-запроса:\n{error_msg}")
+            logger.error(f"SSH ошибка (код {exit_code}): {error_msg}")
 
+            # Форматируем ошибку для Telegram
+            if "Permission denied" in error_msg:
+                error_msg = "Ошибка доступа: неверный SSH ключ или права"
+            elif "Connection timed out" in error_msg:
+                error_msg = "Таймаут соединения с сервером"
+
+            await update.message.reply_text(f"Ошибка SSH:\n{error_msg}")
+
+    except FileNotFoundError as e:
+        logger.error(f"Не найден SSH клиент: {str(e)}")
+        await update.message.reply_text("Ошибка: SSH клиент не установлен в системе")
     except Exception as e:
-        await update.message.reply_text(f"Произошла ошибка: {str(e)}")
+        logger.exception(f"Неожиданная ошибка при обработке запроса для {user_login}")
+        await update.message.reply_text(f"Произошла непредвиденная ошибка: {str(e)}")
 
 
 def generate_login_variants(login: str) -> list:
