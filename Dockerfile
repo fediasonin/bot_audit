@@ -25,7 +25,11 @@ COPY --chown=appuser:appuser known_hosts /home/appuser/.ssh/known_hosts
 RUN chmod 600 /home/appuser/.ssh/id_ed25519 && \
     chmod 644 /home/appuser/.ssh/known_hosts
 
-# Копируем основной код (владельцем будет root)
+# Копируем .env с нужным владельцем и правами
+COPY --chown=appuser:appuser .env /app/.env
+RUN chmod 600 /app/.env
+
+# Копируем остальной код
 COPY . .
 
 # Переключаемся на appuser (для безопасности)
