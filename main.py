@@ -261,7 +261,7 @@ async def ssh_logs_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_login = context.args[0].strip("'\"")
     logger.info(f"Запрошены логи для пользователя: {user_login}")
 
-    ssh_key_path = "/home/appuser/.ssh/id_ed25519"
+    ssh_key_path = "/app/ssh/id_ed25519"
     ssh_host = "10.4.96.65"
     ssh_user = "tgbot"
 
@@ -277,7 +277,7 @@ async def ssh_logs_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "ssh",
             "-i", ssh_key_path,
             "-o", "StrictHostKeyChecking=yes",
-            "-o", "UserKnownHostsFile=/home/appuser/.ssh/known_hosts",
+            "-o", "UserKnownHostsFile=/app/ssh/known_hosts",
             "-o", "LogLevel=ERROR",  # Уменьшаем verbosity SSH
             "-v",  # Включаем verbose для логов
             f"{ssh_user}@{ssh_host}",
