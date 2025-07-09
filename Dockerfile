@@ -5,34 +5,18 @@ RUN apt-get update && apt-get install -y \
     openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
-# Создаем пользователя appuser
-RUN useradd -m appuser && \
-    mkdir -p /home/appuser/.ssh && \
-    chown -R appuser:appuser /home/appuser/.ssh && \
-    chmod 700 /home/appuser/.ssh
-
 WORKDIR /app
 
-# Копируем зависимости и устанавливаем их
+# Устанавливаем зависимости
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Копируем SSH-ключи (права сохранятся из-за COPY --chown)
-COPY --chown=appuser:appuser id_ed25519 /home/appuser/.ssh/id_ed25519
-COPY --chown=appuser:appuser known_hosts /home/appuser/.ssh/known_hosts
-
-# Устанавливаем правильные права
-RUN chmod 600 /home/appuser/.ssh/id_ed25519 && \
-    chmod 644 /home/appuser/.ssh/known_hosts
-
-# Копируем остальной код
+# Копируем весь код, включая .env и SSH-ключи
 COPY . .
 
-# Копируем .env с нужным владельцем и правами — в самом конце!
-COPY --chown=appuser:appuser .env /app/.env
-RUN chmod 600 /app/.env
-
-# Переключаемся на appuser (для безопасности)
-USER appuser
+# Устанавливаем права для SSH
+RUN chmod 700 /home/appuser/.ssh && \
+    chmod 600 /home/appuser/.ssh/id_ed25519 && \
+    chmod 644 /home/appuser/.ssh/known_hosts || true
 
 CMD ["python", "main.py"]
