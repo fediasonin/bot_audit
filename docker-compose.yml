@@ -11,3 +11,5 @@ services:
       ORG_NAME: ${ORG_NAME}
       N: ${N}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+    volumes:
+      - ./ssh:/app/ssh:ro
