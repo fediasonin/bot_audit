@@ -1,5 +1,7 @@
 import logging
 import os
+import shlex
+
 import requests
 import json
 import asyncio
@@ -254,8 +256,10 @@ async def ssh_logs_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not context.args:
         logger.warning("Не указан логин пользователя")
-        await update.message.reply_text("Пожалуйста, укажите логин: `/sshlogs 'логин'`",
-                                        parse_mode=ParseMode.MARKDOWN)
+        await update.message.reply_text(
+            "Пожалуйста, укажите логин: `/sshlogs 'логин'`",
+            parse_mode=ParseMode.MARKDOWN
+        )
         return
 
     user_login = context.args[0].strip("'\"")
@@ -265,7 +269,6 @@ async def ssh_logs_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ssh_host = "10.4.96.65"
     ssh_user = "tgbot"
 
-    # Проверка существования SSH-ключа
     if not os.path.exists(ssh_key_path):
         error_msg = f"SSH ключ не найден по пути: {ssh_key_path}"
         logger.error(error_msg)
@@ -273,15 +276,16 @@ async def ssh_logs_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
+        safe_login = shlex.quote(user_login)
+
         ssh_command = [
             "ssh",
             "-i", ssh_key_path,
             "-o", "StrictHostKeyChecking=yes",
             "-o", "UserKnownHostsFile=/app/ssh/known_hosts",
-            "-o", "LogLevel=ERROR",  # Уменьшаем verbosity SSH
-            "-v",  # Включаем verbose для логов
+            "-o", "LogLevel=ERROR",
             f"{ssh_user}@{ssh_host}",
-            f"'{user_login}'"
+            safe_login
         ]
 
         logger.debug(f"Формируемая SSH команда: {' '.join(ssh_command)}")
@@ -294,7 +298,6 @@ async def ssh_logs_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         logger.info(f"Запущен SSH процесс (PID: {process.pid}) для пользователя: {user_login}")
 
-        # Таймаут 30 секунд на выполнение
         try:
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30.0)
         except asyncio.TimeoutError:
@@ -309,12 +312,18 @@ async def ssh_logs_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logs = stdout.decode().strip()
             if logs:
                 logger.info(f"Успешно получены логи для {user_login} (длина: {len(logs)} символов)")
-                file_obj = io.BytesIO(logs.encode('utf-8'))
-                file_obj.name = f"logs_{user_login}.txt"
-                await update.message.reply_document(
-                    document=InputFile(file_obj),
-                    caption=f"Логи для {user_login}"
-                )
+                if len(logs) <= 4000:
+                    await update.message.reply_text(
+                        f"<b>Логи для {user_login}:</b>\n\n<pre>{logs}</pre>",
+                        parse_mode=ParseMode.HTML
+                    )
+                else:
+                    file_obj = io.BytesIO(logs.encode('utf-8'))
+                    file_obj.name = f"logs_{user_login}.txt"
+                    await update.message.reply_document(
+                        document=InputFile(file_obj),
+                        caption=f"Логи для {user_login} (вложением, т.к. длинные)"
+                    )
             else:
                 logger.warning(f"Пустой ответ от сервера для {user_login}")
                 await update.message.reply_text("Сервер вернул пустой ответ")
@@ -322,7 +331,6 @@ async def ssh_logs_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             error_msg = stderr.decode().strip()
             logger.error(f"SSH ошибка (код {exit_code}): {error_msg}")
 
-            # Форматируем ошибку для Telegram
             if "Permission denied" in error_msg:
                 error_msg = "Ошибка доступа: неверный SSH ключ или права"
             elif "Connection timed out" in error_msg:
